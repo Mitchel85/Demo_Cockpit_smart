@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Immobilien Verwaltung — Smart Cockpit</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Mono:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+<style>
+  :root {
+    --bg: #0d0f0e; --surface: #141816; --card: #1a1e1c; --border: #2a302d;
+    --gold: #c9a84c; --gold2: #e8c97a; --sage: #7aab8c; --muted: #4a5550;
+    --text: #e8ede9; --text2: #9aada3; --accent: #d4614a; --r: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'DM Mono', monospace; min-height: 100vh; overflow-x: hidden; }
+
+  /* Header & Nav */
+  header { padding: 2rem 3rem; border-bottom: 1px solid var(--border); background: linear-gradient(135deg, #0d0f0e 0%, #141a17 100%); }
+  .header-inner { display: flex; align-items: center; gap: 2rem; }
+  .logo-badge { width: 60px; height: 60px; border: 2px solid var(--gold); border-radius: 4px; display: flex; align-items: center; justify-content: center; font-family: 'Playfair Display', serif; font-size: 1.5rem; color: var(--gold); background: rgba(201,168,76,.06); }
+  .header-text h1 { font-family: 'Playfair Display', serif; font-size: 1.8rem; font-weight: 600; color: var(--text); }
+  .header-text .sub { font-size: .7rem; color: var(--gold); letter-spacing: .15em; text-transform: uppercase; margin-top: .3rem; }
+  
+  nav { display: flex; gap: 0; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 2rem; overflow-x: auto; }
+  nav button { background: none; border: none; cursor: pointer; color: var(--text2); font-family: 'DM Mono', monospace; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; padding: 1rem 1.4rem; border-bottom: 2px solid transparent; transition: 0.2s; display: flex; align-items: center; gap: .5rem; }
+  nav button:hover { color: var(--text); }
+  nav button.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+  /* Main & Cards */
+  main { padding: 2rem 3rem; max-width: 1400px; margin: 0 auto; }
+  .section { display: none; animation: fadeIn .3s ease; }
+  .section.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+  .section-title { font-family: 'Playfair Display', serif; font-size: 1.5rem; font-weight: 600; margin-bottom: .4rem; color: var(--text); display: flex; justify-content: space-between; align-items: center; }
+  .section-desc { font-size: .75rem; color: var(--text2); margin-bottom: 1.5rem; font-style: italic; font-family: 'Cormorant Garamond', serif; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .card-title { font-size: .65rem; letter-spacing: .15em; text-transform: uppercase; color: var(--gold); margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
+  .card-title-text { display: flex; align-items: center; gap: .6rem; flex: 1; }
+  .card-title-text::after { content: ''; flex: 1; height: 1px; background: var(--border); margin-right: 1rem; }
+  
+  .export-tools { display: flex; gap: 0.4rem; }
+  .export-btn { background: var(--surface); border: 1px solid var(--border); color: var(--text2); font-size: 0.6rem; padding: 0.3rem 0.6rem; border-radius: 4px; cursor: pointer; transition: 0.2s; font-family: 'DM Mono', monospace; }
+  .export-btn:hover { color: var(--gold); border-color: var(--gold); background: rgba(201,168,76,.1); }
+
+  /* Global API Config */
+  .global-config { background: #101412; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 2rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  .global-config input, .global-config select { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 0.5rem; border-radius: 4px; font-family: 'DM Mono', monospace; font-size: 0.75rem; flex: 1; min-width: 150px; }
+  .url-display { font-size: 0.65rem; color: var(--text2); background: rgba(0,0,0,0.2); padding: 0.4rem 0.6rem; border-radius: 4px; font-family: 'DM Mono', monospace; display: flex; align-items: center; gap: 0.5rem; transition: color 0.3s; }
+
+  /* Smart Input per Tab */
+  .tab-ai-panel { display: grid; grid-template-columns: 1fr 250px; gap: 1rem; background: rgba(20,24,22,0.5); border: 1px dashed var(--gold); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; }
+  .ai-drop-zone { border: 1px dashed var(--muted); border-radius: 6px; padding: 1rem; text-align: center; color: var(--text2); cursor: pointer; transition: 0.2s; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 0.5rem; }
+  .ai-drop-zone.dragover { background: rgba(201,168,76,.1); border-color: var(--gold); color: var(--gold); }
+  .ai-textarea { width: 100%; height: 80px; background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 0.5rem; font-family: 'DM Mono', monospace; border-radius: 4px; resize: vertical; font-size: 0.75rem; margin-top: 0.5rem; }
+  .ai-action-col { display: flex; flex-direction: column; gap: 0.5rem; justify-content: center; }
+  
+  .btn { background: var(--gold); color: var(--bg); border: none; padding: 0.6rem 1rem; border-radius: 4px; font-weight: 600; cursor: pointer; transition: 0.2s; font-family: 'DM Mono', monospace; font-size: 0.7rem; text-align: center; }
+  .btn:hover { opacity: 0.9; }
+  .btn-outline { background: transparent; border: 1px solid var(--gold); color: var(--gold); }
+  
+  .ai-status { font-size: 0.65rem; color: var(--sage); text-align: center; min-height: 15px; }
+
+  /* Diagram Specifics */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); padding: 1.2rem; border-top: 2px solid var(--gold); transition: 0.3s; }
+  .stat-val { font-family: 'Playfair Display', serif; font-size: 1.6rem; color: var(--text); }
+  .stat-label { font-size: .6rem; color: var(--text2); margin-top: .3rem; letter-spacing: .1em; text-transform: uppercase; }
+
+  .fixkosten-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
+  .fixkosten-item { background: #141a17; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+  .fk-label { font-size: .65rem; color: var(--text2); text-transform: uppercase; }
+  .fk-value { font-size: 1.2rem; color: var(--gold); font-family: 'Playfair Display', serif; margin: 0.3rem 0; }
+  
+  .pie-layout { display: grid; grid-template-columns: 280px 1fr; gap: 2rem; align-items: center; }
+  .legend-item { display: flex; align-items: center; gap: .5rem; font-size: .7rem; margin-bottom: 0.5rem; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+  
+  #kg-container { width: 100%; height: 500px; background: #101412; border-radius: 8px; border: 1px solid var(--border); }
+  
+  .mermaid-wrapper { width: 100%; overflow-x: auto; padding: 1rem 0; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo-badge">CH</div>
+    <div class="header-text">
+      <h1>Immobilien Verwaltung</h1>
+      <div class="sub">Intelligentes Master-Cockpit</div>
+    </div>
+  </div>
+</header>
+
+<nav>
+  <button onclick="showTab('overview')">📊 Übersicht</button>
+  <button onclick="showTab('bpmn')">⚙️ Prozesse (BPMN)</button>
+  <button onclick="showTab('c4')">🏗️ IT Architektur</button>
+  <button onclick="showTab('fixkosten')">💶 Fixkosten</button>
+  <button onclick="showTab('pie')">🥧 Portfolio</button>
+  <button onclick="showTab('kg')">🕸️ Wissensgraph</button>
+  <button onclick="showTab('chat')">💬 Freier Chat</button>
+</nav>
+
+<main>
+  <div class="global-config">
+    <span style="font-size: 0.7rem; color: var(--gold); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;">KI Provider Set:</span>
+    <select id="api-provider" onchange="updateModels()"></select>
+    <input list="model-list" id="api-model" placeholder="Modell wählen...">
+    <datalist id="model-list"></datalist>
+    <input type="password" id="api-key" placeholder="API Key">
+    <button class="btn btn-outline" style="padding: 0.5rem 1rem; flex: 0;" onclick="testAPI()" title="Verbindung prüfen">🔌 Test</button>
+    <div class="url-display" id="display-url">http://localhost:11434/api/generate</div>
+  </div>
+
+  <section id="overview" class="section">
+    <div class="section-title">Dashboard KPIs <button class="export-btn" onclick="exportCSV('overview', 'kpis')">📥 CSV Export</button></div>
+    
+    <div class="tab-ai-panel">
+      <div>
+        <div class="ai-drop-zone" ondrop="handleDrop(event, 'input-overview')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+          <span>📂 E-Mail oder Rechnung hier ablegen</span>
+        </div>
+        <textarea id="input-overview" class="ai-textarea" placeholder="Oder Text einfügen..."></textarea>
+      </div>
+      <div class="ai-action-col">
+        <button class="btn" onclick="runAITab('overview', 'ticket')">🛠️ Ticket erstellen (aus E-Mail)</button>
+        <button class="btn btn-outline" onclick="runAITab('overview', 'energy')">⚡ Verbrauch normalisieren</button>
+        <div id="status-overview" class="ai-status">Wartet auf Eingabe...</div>
+      </div>
+    </div>
+
+    <div class="stats-row" id="export-overview">
+      <div class="stat-card"><div class="stat-val" id="val-einheiten">142</div><div class="stat-label">Verwaltete Einheiten</div></div>
+      <div class="stat-card" style="border-top-color: var(--sage)"><div class="stat-val" id="val-energie">14400</div><div class="stat-label">Energiekosten (kWh)</div></div>
+      <div class="stat-card" style="border-top-color: var(--accent)"><div class="stat-val" id="val-tickets">7</div><div class="stat-label">Offene Tickets</div></div>
+      <div class="stat-card" style="border-top-color: #7ab0d4"><div class="stat-val">96,5 %</div><div class="stat-label">Vermietungsquote</div></div>
+    </div>
+  </section>
+
+  <section id="bpmn" class="section">
+    <div class="section-title">Prozess-Abläufe <button class="export-btn" onclick="exportToImage('export-bpmn', 'prozesse')">🖼️ Bild Export</button></div>
+    
+    <div class="tab-ai-panel">
+      <div>
+        <textarea id="input-bpmn" class="ai-textarea" style="height: 120px;" placeholder="Beschreibe einen Prozessablauf (z.B. 'Wenn eine Kündigung eingeht, prüfe die Frist. Wenn ok, schicke Bestätigung, sonst Ablehnung...')"></textarea>
+      </div>
+      <div class="ai-action-col">
+        <button class="btn" onclick="runAITab('bpmn')">⚙️ Prozessdiagramm generieren</button>
+        <div id="status-bpmn" class="ai-status">Wartet auf Eingabe...</div>
+      </div>
+    </div>
+
+    <div class="card" id="export-bpmn">
+      <div class="card-title">Generiertes BPMN Diagramm</div>
+      <div class="mermaid-wrapper" id="render-bpmn">
+        <div class="mermaid">
+flowchart LR
+    Start([Kündigung]) --> Prüfen[Frist prüfen]
+    Prüfen --> Check{Frist OK?}
+    Check -->|Ja| Bestätigen[Bestätigung senden]
+    Check -->|Nein| Ablehnen[Ablehnung senden]
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="c4" class="section">
+    <div class="section-title">IT Architektur <button class="export-btn" onclick="exportToImage('export-c4', 'architektur')">🖼️ Bild Export</button></div>
+    
+    <div class="tab-ai-panel">
+      <div>
+        <textarea id="input-c4" class="ai-textarea" style="height: 120px;" placeholder="Beschreibe deine IT-Tools (z.B. 'Die Buchhaltung nutzt DATEV, welches Daten aus unserem PostgreSQL Backend zieht...')"></textarea>
+      </div>
+      <div class="ai-action-col">
+        <button class="btn" onclick="runAITab('c4')">🏗️ Architektur zeichnen</button>
+        <div id="status-c4" class="ai-status">Wartet auf Eingabe...</div>
+      </div>
+    </div>
+
+    <div class="card" id="export-c4">
+      <div class="card-title">System-Architektur (Mermaid C4)</div>
+      <div class="mermaid-wrapper" id="render-c4">
+        <div class="mermaid">
+graph TD
+    User[Admin] -->|Loggt ein| App[Web App]
+    App -->|Liest/Schreibt| DB[(PostgreSQL)]
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="fixkosten" class="section">
+    <div class="section-title">Fixkosten <button class="export-btn" onclick="exportCSV('fixkosten', 'fixkosten')">📥 CSV Export</button></div>
+    
+    <div class="tab-ai-panel">
+      <div>
+        <div class="ai-drop-zone" ondrop="handleDrop(event, 'input-fixkosten')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+          <span>📂 Rechnung hier ablegen</span>
+        </div>
+        <textarea id="input-fixkosten" class="ai-textarea" placeholder="Oder Rechnungstext hier einfügen..."></textarea>
+      </div>
+      <div class="ai-action-col">
+        <button class="btn" onclick="runAITab('fixkosten')">💶 Kostenpunkt hinzufügen</button>
+        <div id="status-fixkosten" class="ai-status">Wartet auf Eingabe...</div>
+      </div>
+    </div>
+
+    <div class="card" id="export-fixkosten">
+      <div class="card-title">Monatliche Kostenblöcke</div>
+      <div class="fixkosten-grid" id="render-fixkosten"></div>
+    </div>
+  </section>
+
+  <section id="pie" class="section">
+    <div class="section-title">Portfolio Analyse <button class="export-btn" onclick="exportToImage('export-pie', 'portfolio')">🖼️ Bild Export</button></div>
+    
+    <div class="tab-ai-panel">
+      <div>
+        <textarea id="input-pie" class="ai-textarea" style="height: 120px;" placeholder="Füge Rohdaten für ein Tortendiagramm ein (z.B. 'Wir haben 40 Wohnungen in Haus A, 20 in Haus B und 5 Gewerbe')"></textarea>
+      </div>
+      <div class="ai-action-col">
+        <button class="btn" onclick="runAITab('pie')">🥧 Diagramm aktualisieren</button>
+        <div id="status-pie" class="ai-status">Wartet auf Eingabe...</div>
+      </div>
+    </div>
+
+    <div class="card" id="export-pie">
+      <div class="card-title">Verteilung</div>
+      <div class="pie-layout">
+        <canvas id="render-pie" width="280" height="280"></canvas>
+        <div id="legend-pie"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="kg" class="section">
+    <div class="section-title">Wissensgraph <button class="export-btn" onclick="exportToImage('export-kg', 'netzwerk')">🖼️ Bild Export</button></div>
+    
+    <div class="tab-ai-panel">
+      <div>
+        <textarea id="input-kg" class="ai-textarea" style="height: 120px;" placeholder="Wer macht was? (z.B. 'Max Mustermann ist Hausmeister und betreut Gebäude A')"></textarea>
+      </div>
+      <div class="ai-action-col">
+        <button class="btn" onclick="runAITab('kg')">🕸️ Netzwerk erweitern</button>
+        <div id="status-kg" class="ai-status">Wartet auf Eingabe...</div>
+      </div>
+    </div>
+
+    <div class="card" id="export-kg" style="padding:1rem;">
+      <div id="render-kg" style="width: 100%; height: 500px; background: #101412; border-radius: 8px;"></div>
+    </div>
+  </section>
+
+  <section id="chat" class="section">
+    <div class="section-title">KI Dokumenten-Chat</div>
+    <div class="tab-ai-panel" style="grid-template-columns: 1fr;">
+      <textarea id="input-chat" class="ai-textarea" style="height: 150px;" placeholder="Stelle eine Frage zu deinen Dokumenten oder Verträgen..."></textarea>
+      <button class="btn" onclick="runAITab('chat')" style="width: 200px; margin: 0 auto;">💬 Senden</button>
+      <div id="status-chat" class="ai-status"></div>
+    </div>
+    <div class="card" id="render-chat" style="display:none; white-space: pre-wrap; color: var(--sage); font-size: 0.85rem;"></div>
+  </section>
+
+</main>
+
+<script>
+// ── Globale Provider & Model Init ──
+const apiProviders = {
+  gemini: { name: "Google Gemini", url: "https://generativelanguage.googleapis.com/v1beta/models/", format: "gemini", models: ["gemini-3.1-pro-preview", "gemini-3.0-flash", "gemini-2.5-pro"] },
+  ollama: { name: "Ollama (Lokal)", url: "http://localhost:11434/api/generate", format: "ollama", models: ["llama3", "mistral"] },
+  openai: { name: "OpenAI", url: "https://api.openai.com/v1/chat/completions", format: "openai", models: ["gpt-4o", "gpt-4.5-turbo"] },
+  anthropic: { name: "Anthropic Claude", url: "https://api.anthropic.com/v1/messages", format: "anthropic", models: ["claude-3-5-sonnet-latest"] },
+  openrouter: { name: "OpenRouter", url: "https://openrouter.ai/api/v1/chat/completions", format: "openai", models: ["google/gemini-3.1-pro-preview", "anthropic/claude-3.5-sonnet"] }
+};
+
+function initProviders() {
+  const provSelect = document.getElementById('api-provider');
+  for (const [key, data] of Object.entries(apiProviders)) {
+    const opt = document.createElement('option'); opt.value = key; opt.textContent = data.name; provSelect.appendChild(opt);
+  }
+  updateModels();
+}
+
+function updateModels() {
+  const p = apiProviders[document.getElementById('api-provider').value];
+  document.getElementById('display-url').innerText = p.url;
+  const dl = document.getElementById('model-list'); dl.innerHTML = '';
+  p.models.forEach(m => { const o = document.createElement('option'); o.value = m; dl.appendChild(o); });
+  document.getElementById('api-model').value = p.models[0] || "";
+}
+
+// ── Funktion: API Test ──
+async function testAPI() {
+  const providerKey = document.getElementById('api-provider').value;
+  const pData = apiProviders[providerKey];
+  const apiKey = document.getElementById('api-key').value;
+  const model = document.getElementById('api-model').value.trim();
+  const urlDisplay = document.getElementById('display-url');
+
+  if (!model) return alert("Bitte wähle ein Modell aus!");
+  if (pData.format !== 'ollama' && !apiKey) return alert("API Key für diesen Anbieter wird benötigt!");
+
+  const originalUrl = pData.url;
+  urlDisplay.innerText = "⏳ Teste Verbindung...";
+  urlDisplay.style.color = "var(--gold)";
+
+  let sysPrompt = "Du bist ein API-Tester. Antworte exakt mit: '🟢 Verbindung erfolgreich!'";
+
+  try {
+    let payload = {}; let headers = { "Content-Type": "application/json" }; let endpoint = pData.url;
+    
+    if (pData.format === 'ollama') {
+      payload = { model, prompt: sysPrompt, stream: false };
+    } else if (pData.format === 'openai') {
+      if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+      payload = { model, messages: [{ role: "user", content: sysPrompt }] };
+    } else if (pData.format === 'gemini') {
+      endpoint = `${pData.url}${model}:generateContent?key=${apiKey}`;
+      payload = { contents: [{ parts: [{ text: sysPrompt }] }] };
+    } else if (pData.format === 'anthropic') {
+      headers["x-api-key"] = apiKey;
+      headers["anthropic-version"] = "2023-06-01";
+      headers["anthropic-dangerously-allow-urls"] = "true";
+      payload = { model, max_tokens: 100, messages: [{ role: "user", content: sysPrompt }] };
+    }
+
+    const res = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify(payload) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    
+    urlDisplay.innerText = "🟢 Verbindung erfolgreich!";
+    urlDisplay.style.color = "var(--sage)";
+  } catch (err) {
+    urlDisplay.innerText = "❌ Fehler: " + err.message;
+    urlDisplay.style.color = "var(--accent)";
+  } finally {
+    setTimeout(() => { 
+      urlDisplay.innerText = originalUrl; 
+      urlDisplay.style.color = "var(--text2)"; 
+    }, 4000);
+  }
+}
+
+// ── Tab Navigation & Render Init ──
+let initTracker = { mermaid: false, fixkosten: false, pie: false, kg: false };
+
+function showTab(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const btn = document.querySelector(`nav button[onclick="showTab('${id}')"]`);
+  if (btn) btn.classList.add('active');
+
+  if ((id === 'bpmn' || id === 'c4') && !initTracker.mermaid) { mermaid.init(undefined, document.querySelectorAll('.mermaid')); initTracker.mermaid = true; }
+  if (id === 'fixkosten' && !initTracker.fixkosten) { renderFixkosten(); initTracker.fixkosten = true; }
+  if (id === 'pie' && !initTracker.pie) { initPie(); initTracker.pie = true; }
+  if (id === 'kg' && !initTracker.kg) { initWissensgraph(); initTracker.kg = true; }
+}
+
+window.addEventListener('DOMContentLoaded', () => { initProviders(); showTab('overview'); mermaid.initialize({ startOnLoad: false, theme: 'dark' }); });
+
+// ── Drag & Drop Utilities ──
+function handleDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); }
+function handleDragLeave(e) { e.currentTarget.classList.remove('dragover'); }
+function handleDrop(e, targetInputId) {
+  e.preventDefault(); e.currentTarget.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (ev) => { document.getElementById(targetInputId).value = ev.target.result; };
+    reader.readAsText(file);
+  } else {
+    document.getElementById(targetInputId).value = e.dataTransfer.getData('text');
+  }
+}
+
+// ── Daten für generische Dashboards ──
+let fixkostenData = [
+  { label: 'Hausmeister', value: 8200, sub: 'Pauschal' },
+  { label: 'Energie', value: 14400, sub: 'Abschlag' }
+];
+
+let pieChartInstance = null;
+let kgNetwork = null;
+let kgNodes = new vis.DataSet([{id: 1, label: 'Christian Hoffmann', color: '#c9a84c'}]);
+let kgEdges = new vis.DataSet([]);
+
+function renderFixkosten() {
+  const container = document.getElementById('render-fixkosten'); container.innerHTML = '';
+  fixkostenData.forEach(item => {
+    container.innerHTML += `<div class="fixkosten-item"><div class="fk-label">${item.label}</div><div class="fk-value">${item.value} €</div><div class="fk-sub">${item.sub}</div></div>`;
+  });
+}
+
+function initPie() {
+  const ctx = document.getElementById('render-pie').getContext('2d');
+  pieChartInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: ['Wohnen', 'Gewerbe'], datasets: [{ data: [120, 22], backgroundColor: ['#c9a84c', '#7aab8c'], borderColor: '#141816', borderWidth: 2 }] },
+    options: { responsive: false, plugins: { legend: { display: false } }, cutout: '60%' }
+  });
+  updatePieLegend(['Wohnen', 'Gewerbe'], ['#c9a84c', '#7aab8c'], [120, 22]);
+}
+
+function updatePieLegend(labels, colors, data) {
+  const leg = document.getElementById('legend-pie'); leg.innerHTML = '';
+  labels.forEach((l, i) => {
+    leg.innerHTML += `<div class="legend-item"><div class="legend-dot" style="background:${colors[i % colors.length]}"></div><span>${l}: <strong>${data[i]}</strong></span></div>`;
+  });
+}
+
+function initWissensgraph() {
+  kgNetwork = new vis.Network(document.getElementById('render-kg'), {nodes: kgNodes, edges: kgEdges}, { physics: { stabilization: true } });
+}
+
+// ── Die Zentrale KI-Engine pro Tab ──
+async function runAITab(tabId, subAction = null) {
+  const inputEl = document.getElementById(`input-${tabId}`);
+  const text = inputEl.value.trim();
+  const statusEl = document.getElementById(`status-${tabId}`);
+  
+  const providerKey = document.getElementById('api-provider').value;
+  const pData = apiProviders[providerKey];
+  const apiKey = document.getElementById('api-key').value;
+  const model = document.getElementById('api-model').value.trim();
+
+  if (!text) return alert("Bitte Text eingeben oder Datei hineinziehen.");
+  if (pData.format !== 'ollama' && !apiKey) return alert("API Key für diesen Anbieter wird benötigt.");
+
+  let sysPrompt = ""; let format = "json";
+  
+  if (tabId === 'overview' && subAction === 'ticket') {
+    sysPrompt = `Extrahiere aus der Mail ein Ticket. Antworte NUR als JSON: {"new_tickets_count": 1}`;
+  } else if (tabId === 'overview' && subAction === 'energy') {
+    sysPrompt = `Normalisiere den Verbrauch auf ein Jahr. Antworte NUR als JSON: {"normalisierter_verbrauch": 12000}`;
+  } else if (tabId === 'bpmn') {
+    sysPrompt = `Erstelle ein Mermaid js BPMN flowchart Diagramm. Antworte AUSSCHLIESSLICH mit dem reinen Mermaid Code, ohne \`\`\` Markdown. Starte direkt mit 'flowchart LR'.`; format = "text";
+  } else if (tabId === 'c4') {
+    sysPrompt = `Erstelle ein Mermaid C4 Architektur Diagramm. Antworte AUSSCHLIESSLICH mit dem reinen Mermaid Code, ohne \`\`\` Markdown. Starte direkt mit 'graph TD'.`; format = "text";
+  } else if (tabId === 'fixkosten') {
+    sysPrompt = `Extrahiere den Kostenpunkt. Antworte NUR als JSON Array: [{"label": "Name", "value": 100, "sub": "Zusatz"}]`;
+  } else if (tabId === 'pie') {
+    sysPrompt = `Extrahiere Verteilungen. Antworte NUR als JSON: {"labels": ["A", "B"], "data": [10, 20]}`;
+  } else if (tabId === 'kg') {
+    sysPrompt = `Extrahiere Entitäten und Relationen. IDs müssen einzigartige Integers sein. Antworte NUR als JSON: {"nodes": [{"id": 2, "label": "Name", "color": "#7aab8c"}], "edges": [{"from": 1, "to": 2, "label": "kennt"}]}`;
+  } else if (tabId === 'chat') {
+    sysPrompt = `Du bist ein hilfsbereiter KI-Assistent der Immobilienverwaltung Hoffmann. Antworte professionell in Markdown.`; format = "text";
+  }
+
+  statusEl.innerText = "⏳ KI analysiert...";
+  
+  try {
+    let payload = {}; let headers = { "Content-Type": "application/json" }; let endpoint = pData.url;
+    
+    if (pData.format === 'ollama') {
+      payload = { model, prompt: sysPrompt + "\n\nEingabe:\n" + text, stream: false };
+      if (format === 'json') payload.format = "json";
+    } else if (pData.format === 'openai') {
+      if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+      payload = { model, messages: [{ role: "system", content: sysPrompt }, { role: "user", content: text }] };
+    } else if (pData.format === 'gemini') {
+      endpoint = `${pData.url}${model}:generateContent?key=${apiKey}`;
+      payload = { contents: [{ parts: [{ text: sysPrompt + "\n\nEingabe:\n" + text }] }] };
+    } else if (pData.format === 'anthropic') {
+      headers["x-api-key"] = apiKey;
+      headers["anthropic-version"] = "2023-06-01";
+      headers["anthropic-dangerously-allow-urls"] = "true";
+      payload = { model, max_tokens: 2000, system: sysPrompt, messages: [{ role: "user", content: text }] };
+    }
+
+    const res = await fetch(endpoint, { method: "POST", headers, body: JSON.stringify(payload) });
+    if (!res.ok) throw new Error(`API Fehler: ${res.status}`);
+    const data = await res.json();
+
+    let aiResponse = "";
+    if (pData.format === 'ollama') aiResponse = data.response;
+    else if (pData.format === 'openai') aiResponse = data.choices[0].message.content;
+    else if (pData.format === 'gemini') aiResponse = data.candidates[0].content.parts[0].text;
+    else if (pData.format === 'anthropic') aiResponse = data.content[0].text;
+
+    aiResponse = aiResponse.replace(/```json|```mermaid|```/gi, "").trim();
+
+    if (tabId === 'overview') {
+       let parsed = JSON.parse(aiResponse);
+       if (subAction === 'ticket') {
+           let el = document.getElementById('val-tickets'); el.innerText = parseInt(el.innerText) + (parsed.new_tickets_count || 1);
+       } else {
+           let el = document.getElementById('val-energie'); el.innerText = parsed.normalisierter_verbrauch;
+       }
+    } 
+    else if (tabId === 'bpmn' || tabId === 'c4') {
+       let wrapper = document.getElementById(`render-${tabId}`);
+       wrapper.innerHTML = `<div class="mermaid">${aiResponse}</div>`;
+       mermaid.init(undefined, wrapper.querySelectorAll('.mermaid'));
+    } 
+    else if (tabId === 'fixkosten') {
+       let parsed = JSON.parse(aiResponse);
+       fixkostenData.push(...parsed);
+       renderFixkosten();
+    } 
+    else if (tabId === 'pie') {
+       let parsed = JSON.parse(aiResponse);
+       const colors = ['#c9a84c', '#7aab8c', '#7ab0d4', '#d4614a'];
+       pieChartInstance.data.labels = parsed.labels;
+       pieChartInstance.data.datasets[0].data = parsed.data;
+       pieChartInstance.update();
+       updatePieLegend(parsed.labels, colors, parsed.data);
+    } 
+    else if (tabId === 'kg') {
+       let parsed = JSON.parse(aiResponse);
+       kgNodes.add(parsed.nodes);
+       kgEdges.add(parsed.edges);
+    }
+    else if (tabId === 'chat') {
+       let chatBox = document.getElementById('render-chat');
+       chatBox.style.display = 'block';
+       chatBox.innerText = aiResponse;
+    }
+
+    statusEl.innerText = "✅ Erfolgreich aktualisiert!";
+    inputEl.value = "";
+    setTimeout(() => { statusEl.innerText = "Bereit für Eingabe..."; }, 3000);
+
+  } catch (err) {
+    statusEl.innerText = "❌ Fehler aufgetreten.";
+    alert("Fehler bei der KI Verarbeitung: " + err.message);
+  }
+}
+
+// ── Export Funktionen (Bild & Tabelle) ──
+function exportToImage(elementId, filename) {
+  const el = document.getElementById(elementId);
+  html2canvas(el, { backgroundColor: '#1a1e1c', scale: 2 }).then(canvas => {
+    const link = document.createElement('a'); link.download = filename + '.png'; link.href = canvas.toDataURL('image/png'); link.click();
+  });
+}
+
+function exportCSV(type, filename) {
+  let csv = "Kategorie,Wert\n";
+  if (type === 'overview') {
+    csv += `Einheiten,${document.getElementById('val-einheiten').innerText}\nEnergiekosten,${document.getElementById('val-energie').innerText}\nOffene Tickets,${document.getElementById('val-tickets').innerText}\n`;
+  } else if (type === 'fixkosten') {
+    fixkostenData.forEach(row => { csv += `${row.label},${row.value}\n`; });
+  }
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = filename + ".csv";
+  document.body.appendChild(link); link.click(); document.body.removeChild(link);
+}
+</script>
+</body>
+</html>
