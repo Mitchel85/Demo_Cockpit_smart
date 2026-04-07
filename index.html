@@ -9,6 +9,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<!-- ★ NEU: pdf.js für PDF-Textextraktion -->
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 
 <style>
   :root {
@@ -107,6 +109,14 @@
   @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: none; opacity: 1; } }
   @keyframes fadeOut { to { opacity: 0; transform: translateY(-10px); } }
 
+  /* ★ NEU: Ergebnis-Karte Verbrauchsnormalisierung */
+  .energy-result-card { background: var(--card); border: 1px solid var(--sage); border-radius: var(--r); padding: 1.5rem; margin-bottom: 1.5rem; display: none; animation: fadeIn .3s ease; }
+  .energy-result-card .er-header { font-size: .65rem; letter-spacing: .15em; text-transform: uppercase; color: var(--sage); margin-bottom: 1rem; }
+  .energy-result-card .er-body { display: flex; align-items: center; gap: 2rem; flex-wrap: wrap; }
+  .energy-result-card .er-value { font-family: 'Playfair Display', serif; font-size: 2rem; color: var(--sage); }
+  .energy-result-card .er-unit { font-size: 0.8rem; color: var(--text2); margin-left: 0.3rem; }
+  .energy-result-card .er-explain { font-size: 0.85rem; color: var(--text2); font-style: italic; font-family: 'Cormorant Garamond', serif; line-height: 1.5; max-width: 500px; }
+
   @media (max-width: 900px) {
     header { padding: 1.5rem 1.5rem; }
     main { padding: 1rem 1rem; }
@@ -169,8 +179,8 @@
       <div>
         <div class="ai-drop-zone" ondrop="handleDrop(event,'input-overview')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" onclick="document.getElementById('file-overview').click()">
           <span>📂 E-Mail oder Rechnung hier ablegen</span>
-          <span class="file-info">.txt .csv .json .eml</span>
-          <input type="file" id="file-overview" accept=".txt,.csv,.eml,.json,.xml" style="display:none" onchange="handleFileSelect(this,'input-overview')">
+          <span class="file-info">.txt .csv .json .eml .pdf</span>
+          <input type="file" id="file-overview" accept=".txt,.csv,.eml,.json,.xml,.pdf" style="display:none" onchange="handleFileSelect(this,'input-overview')">
         </div>
         <textarea id="input-overview" class="ai-textarea" placeholder="Oder Text einfügen..."></textarea>
       </div>
@@ -186,6 +196,18 @@
       <div class="stat-card" style="border-top-color:var(--sage)"><div class="stat-val" id="val-energie">14.400</div><div class="stat-label">Energiekosten (kWh)</div></div>
       <div class="stat-card" style="border-top-color:var(--accent)"><div class="stat-val" id="val-tickets">7</div><div class="stat-label">Offene Tickets</div></div>
       <div class="stat-card" style="border-top-color:#7ab0d4"><div class="stat-val">96,5 %</div><div class="stat-label">Vermietungsquote</div></div>
+    </div>
+
+    <!-- ★ NEU: Extra Ergebnis-Feld für Verbrauchsnormalisierung -->
+    <div class="energy-result-card" id="energy-result">
+      <div class="er-header">⚡ Ergebnis Verbrauchsnormalisierung</div>
+      <div class="er-body">
+        <div>
+          <span class="er-value" id="er-value">—</span>
+          <span class="er-unit" id="er-unit">kWh</span>
+        </div>
+        <div class="er-explain" id="er-explain"></div>
+      </div>
     </div>
   </section>
 
@@ -238,10 +260,11 @@
 
     <div class="tab-ai-panel">
       <div>
+        <!-- ★ GEÄNDERT: .pdf hinzugefügt -->
         <div class="ai-drop-zone" ondrop="handleDrop(event,'input-fixkosten')" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" onclick="document.getElementById('file-fixkosten').click()">
           <span>📂 Rechnung hier ablegen</span>
-          <span class="file-info">.txt .csv .json</span>
-          <input type="file" id="file-fixkosten" accept=".txt,.csv,.json,.xml" style="display:none" onchange="handleFileSelect(this,'input-fixkosten')">
+          <span class="file-info">.txt .csv .json .pdf</span>
+          <input type="file" id="file-fixkosten" accept=".txt,.csv,.json,.xml,.pdf" style="display:none" onchange="handleFileSelect(this,'input-fixkosten')">
         </div>
         <textarea id="input-fixkosten" class="ai-textarea" placeholder="Oder Rechnungstext einfügen..."></textarea>
       </div>
@@ -342,8 +365,7 @@ const apiProviders = {
     models: [
       "gemini-3.1-pro-preview",
       "gemini-3-flash-preview",
-      "	gemini-3.1-flash-lite-preview",
-
+      "gemini-3.1-flash-lite-preview",
     ]
   },
   ollama: {
@@ -623,7 +645,6 @@ async function renderMermaidBlock(wrapperId, code) {
   } catch (err) {
     console.warn('Mermaid Fehler:', err);
     wrapper.innerHTML = `<pre style="color:var(--accent); font-size:0.75rem; padding:1rem;">⚠️ Mermaid Render-Fehler:\n${err.message || err}\n\nCode:\n${sanitizeHTML(code)}</pre>`;
-    // Cleanup: Mermaid v10 hinterlässt bei Fehlern ein temp-Element
     const temp = document.getElementById(uniqueId);
     if (temp) temp.remove();
   }
@@ -631,9 +652,9 @@ async function renderMermaidBlock(wrapperId, code) {
 
 
 // ══════════════════════════════════════════════════
-//  DRAG & DROP + DATEIAUSWAHL
+//  DRAG & DROP + DATEIAUSWAHL  (★ MIT PDF-SUPPORT)
 // ══════════════════════════════════════════════════
-const ALLOWED_EXT = ['.txt','.csv','.json','.xml','.eml'];
+const ALLOWED_EXT = ['.txt','.csv','.json','.xml','.eml','.pdf'];   // ★ .pdf hinzugefügt
 
 function handleDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); }
 function handleDragLeave(e) { e.currentTarget.classList.remove('dragover'); }
@@ -662,10 +683,17 @@ function processFile(file, targetId) {
     showToast(`Dateityp "${ext}" nicht unterstützt. Erlaubt: ${ALLOWED_EXT.join(', ')}`, 'error');
     return;
   }
-  if (file.size > 512 * 1024) {
-    showToast('Datei zu groß (max 512 KB).', 'error');
+  if (file.size > 2 * 1024 * 1024) {                                 // ★ Limit auf 2 MB für PDFs
+    showToast('Datei zu groß (max 2 MB).', 'error');
     return;
   }
+
+  // ★ NEU: PDF-Sonderbehandlung mit pdf.js
+  if (ext === '.pdf') {
+    extractPDFText(file, targetId);
+    return;
+  }
+
   const reader = new FileReader();
   reader.onload = ev => {
     document.getElementById(targetId).value = ev.target.result;
@@ -673,6 +701,32 @@ function processFile(file, targetId) {
   };
   reader.onerror = () => showToast('Fehler beim Lesen der Datei.', 'error');
   reader.readAsText(file);
+}
+
+// ★ NEU: PDF-Text mit pdf.js extrahieren
+async function extractPDFText(file, targetId) {
+  try {
+    showToast('PDF wird gelesen...', 'info');
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items.map(item => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+    fullText = fullText.trim();
+    if (!fullText) {
+      showToast('PDF enthält keinen extrahierbaren Text (evtl. gescannt).', 'error');
+      return;
+    }
+    document.getElementById(targetId).value = fullText;
+    showToast(`"${file.name}" (${pdf.numPages} Seiten) geladen.`, 'success');
+  } catch (err) {
+    console.error('PDF-Fehler:', err);
+    showToast('PDF konnte nicht gelesen werden: ' + err.message, 'error');
+  }
 }
 
 
@@ -799,7 +853,12 @@ async function runAITab(tabId, subAction = null) {
   if (tabId === 'overview' && subAction === 'ticket') {
     sysPrompt = 'Du bist ein Assistent der Immobilienverwaltung. Extrahiere aus der E-Mail ein Wartungsticket. Antworte NUR mit JSON: {"new_tickets_count": 1, "summary": "Kurzbeschreibung"}. Kein weiterer Text.';
   } else if (tabId === 'overview' && subAction === 'energy') {
-    sysPrompt = 'Du bist ein Energie-Analyst. Normalisiere den Verbrauch auf ein Jahr. Antworte NUR mit JSON: {"normalisierter_verbrauch": 12000}. Kein weiterer Text.';
+    // ★ GEÄNDERT: Detaillierterer Prompt mit Erläuterung
+    sysPrompt = `Du bist ein Energie-Analyst fuer Immobilienverwaltung. Analysiere die eingegebenen Verbrauchsdaten (Strom, Gas, Wasser etc.).
+Normalisiere den Verbrauch auf ein volles Kalenderjahr (12 Monate). Wenn z.B. Daten fuer 3 Monate vorliegen, rechne auf 12 Monate hoch. Wenn bereits Jahresdaten vorliegen, bestaetige diese.
+Antworte AUSSCHLIESSLICH mit JSON in exakt diesem Format:
+{"normalisierter_verbrauch": 12000, "einheit": "kWh", "erlaeuterung": "Kurze Erklaerung wie du gerechnet hast, z.B. Zeitraum und Hochrechnung"}
+Kein weiterer Text ausserhalb des JSON.`;
   } else if (tabId === 'bpmn') {
     sysPrompt = 'Erstelle ein Mermaid.js Flowchart. Antworte AUSSCHLIESSLICH mit reinem Mermaid-Code. Kein Markdown, keine Codeblöcke. Starte mit "flowchart LR" oder "flowchart TD". Keine Umlaute in Node-IDs, nur in Labels in eckigen Klammern.';
   } else if (tabId === 'c4') {
@@ -820,7 +879,6 @@ async function runAITab(tabId, subAction = null) {
   try {
     const { endpoint, headers, payload } = buildRequest(pData, model, apiKey, sysPrompt, text);
 
-    // Ollama JSON-Modus für strukturierte Antworten
     if (pData.format === 'ollama' && tabId !== 'bpmn' && tabId !== 'c4' && tabId !== 'chat') {
       payload.format = 'json';
     }
@@ -835,7 +893,6 @@ async function runAITab(tabId, subAction = null) {
     let aiResponse = extractResponse(pData, data);
     if (!aiResponse) throw new Error('Leere Antwort vom Modell.');
 
-    // Codeblock-Marker entfernen (außer Chat)
     if (tabId !== 'chat') {
       aiResponse = aiResponse.replace(/```(?:json|mermaid|text|plaintext)?\s*/gi, '').replace(/```/g, '').trim();
     }
@@ -848,8 +905,23 @@ async function runAITab(tabId, subAction = null) {
         const el = document.getElementById('val-tickets');
         el.innerText = (parseInt(el.innerText) || 0) + (parsed.new_tickets_count || 1);
         if (parsed.summary) showToast('Ticket: ' + parsed.summary, 'success');
-      } else {
-        document.getElementById('val-energie').innerText = Number(parsed.normalisierter_verbrauch).toLocaleString('de-DE');
+      } else if (subAction === 'energy') {
+        // ★ GEÄNDERT: Ergebnis in Extra-Feld anzeigen
+        const verbrauch = Number(parsed.normalisierter_verbrauch);
+        const einheit = parsed.einheit || 'kWh';
+        const erlaeuterung = parsed.erlaeuterung || '';
+
+        // KPI-Karte aktualisieren
+        document.getElementById('val-energie').innerText = verbrauch.toLocaleString('de-DE');
+
+        // Extra Ergebnis-Feld befüllen und einblenden
+        const resultCard = document.getElementById('energy-result');
+        document.getElementById('er-value').textContent = verbrauch.toLocaleString('de-DE');
+        document.getElementById('er-unit').textContent = einheit;
+        document.getElementById('er-explain').textContent = erlaeuterung;
+        resultCard.style.display = 'block';
+
+        showToast(`Normalisiert: ${verbrauch.toLocaleString('de-DE')} ${einheit}/Jahr`, 'success');
       }
     }
     else if (tabId === 'bpmn') {
@@ -1011,7 +1083,7 @@ function exportKGImage() {
 }
 
 function exportCSV(type, filename) {
-  let csv = '\uFEFF'; // BOM für Excel
+  let csv = '\uFEFF';
   if (type === 'overview') {
     csv += 'Kategorie;Wert\n';
     csv += `Verwaltete Einheiten;${document.getElementById('val-einheiten').innerText}\n`;
@@ -1039,6 +1111,9 @@ function exportCSV(type, filename) {
 //  INIT
 // ══════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
+  // ★ NEU: pdf.js Worker konfigurieren
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
   mermaid.initialize({
     startOnLoad: false,
     theme: 'dark',
